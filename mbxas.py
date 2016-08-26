@@ -198,11 +198,6 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 	#
 	for ic in range(minc, nbnd_f):
 
-		# Only parallelize this
-		if ndepth == 1:
-			iter_rank += 1
-			iter_rank %= size
-
 		icind = ind_ox[ic]
 
 		if icind >= nbnd_f: continue
@@ -246,7 +241,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 					# A new way using the orthogonal complement (I don't care the phase):
 					#Intensity = abs(la.det(xi_mat)) ** 2
 					Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
-			
+
 					if sp.sqrt(Intensity) > throw_away_thr:
 			
 						# Data structure of Af
@@ -300,11 +295,18 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 	
 					# Construct the new configuration
 					f_config_iv = f_config_ic + str(iv) + ' '
-					print f_config_iv
+					#print f_config_iv
 
 					fgen(ndepth = ndepth + 1, maxv = iv - 1, minc = ic + 1, efinal = enew, \
 					f_config = f_config_iv, row_prod = row_prod_iv, oc_vector = oc_vector_new)
-					
+		
+		# endif rank == iter_rank
+
+		# Only parallelize this
+		if ndepth == 1:
+			iter_rank += 1
+			iter_rank %= size
+
 	xi_mat[last_v] = xi_mat_v_tmp.copy()
 	
 # end fgen
@@ -312,7 +314,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 # Record Af from all possible final-state indices f
 If = {} # start with an empty dictonary
 
-iter_rank = -1
+iter_rank = 0
 
 # loop over initial-state spin
 for ispin in range(0, nspin):
@@ -347,25 +349,31 @@ for ispin in range(0, nspin):
 
 	fgen(ndepth = 1, maxv = nelect - 1, minc = nelect, efinal = 0.0, f_config = '', row_prod = row_prod, oc_vector = oc_vector)
 
-print os_sum_gs
+#print os_sum_gs
 
 print "process ", rank, "done"
 
 if ismpi:
 
-	# I'll do this later
-	# wait for the recursive fgen procedure to complete
 	comm.barrier()
 	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
 
-	print "Begin to gather If..."
-	
-	If_all = {}
+	# Only gather to pid = 0
+	if rank == 0:
 
-	for iter_If in If_gather:
-		If_all.update(iter_If)
+		print "Begin to gather If..."
+	
+		If_all = {}
+
+		for iter_If in If_gather:
+
+			for icommon in set(iter_If) & set(If_all):
+				If_all[icommon][1 : nspin + 1] += iter_If[icommon][1 : nspin + 1]
+
+			for iupdate in set(iter_If) - set(If_all):
+				If_all[iupdate] = iter_If[iupdate].copy()
 		
-	print "Done gather If."
+		print "Done gather If."
 
 else:
 	If_all = If
