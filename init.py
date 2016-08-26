@@ -27,7 +27,6 @@ if 'SLURM_JOB_ID' in os.environ:
 
 	try:
 		from mpi4py import MPI
-		print "Running with mpi4py"
 	except ImportError:
 		ismpi = False
 		print "Cannot import mpi4py. Running the serial mode."
@@ -40,6 +39,8 @@ if ismpi:
 	comm = MPI.COMM_WORLD
 	size = comm.Get_size()
 	rank = comm.Get_rank()
+	if rank == 0:
+		print "Running with mpi4py"
 else:
 	size = 1
 	rank = 0
