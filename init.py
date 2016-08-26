@@ -22,12 +22,19 @@ import os
 
 ismpi = True
 
-try:
-	from mpi4py import MPI
-	print "Running with mpi4py"
-except ImportError:
+# This is not robust for every mpi enviroment
+if 'SLURM_JOB_ID' in os.environ:
+
+	try:
+		from mpi4py import MPI
+		print "Running with mpi4py"
+	except ImportError:
+		ismpi = False
+		print "Cannot import mpi4py. Running the serial mode."
+
+else:
 	ismpi = False
-	print "Running the serial version"
+	print "This is not an mpi environment. Running the serial mode."
 
 if ismpi:
 	comm = MPI.COMM_WORLD
