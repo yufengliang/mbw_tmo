@@ -359,21 +359,21 @@ if ismpi:
 	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
 
 	# Only gather to pid = 0
-	if rank == 0:
-
-		print "Begin to gather If..."
-	
-		If_all = {}
-
-		for iter_If in If_gather:
-
-			for icommon in set(iter_If) & set(If_all):
-				If_all[icommon][1 : nspin + 1] += iter_If[icommon][1 : nspin + 1]
-
-			for iupdate in set(iter_If) - set(If_all):
-				If_all[iupdate] = iter_If[iupdate].copy()
-		
-		print "Done gather If."
+#	if rank == 0:
+#
+#		print "Begin to gather If..."
+#	
+#		If_all = {}
+#
+#		for iter_If in If_gather:
+#
+#			for icommon in set(iter_If) & set(If_all):
+#				If_all[icommon][1 : nspin + 1] += iter_If[icommon][1 : nspin + 1]
+#
+#			for iupdate in set(iter_If) - set(If_all):
+#				If_all[iupdate] = iter_If[iupdate].copy()
+#		
+#		print "Done gather If."
 
 else:
 	If_all = If
