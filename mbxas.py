@@ -100,7 +100,7 @@ xi_c = np.zeros([nbnd_f, nspin], CPLX)
 # os_sum_gs should be equal to nspin. GS can increase that by ~25% !!!
 os_sum_gs = 0.0
 
-I0 = {}
+I0 = [{} for i in range(0, nspin)]
 
 for j in range(nelect, nbnd_i):
 
@@ -125,20 +125,13 @@ for j in range(nelect, nbnd_i):
 
 		xi_c[i, spinc] += xi[f, c] * wc
 
-		
+	print spinc, c
 	# Non-interacting spectrum
-	if c in I0:
-
-		I0[c][spinc + 1] = abs(wc) ** 2
-
-	else:
-
-		I0[c] = sp.array([float(ener_gs[c] - e_cbm_ox)] + [float(0)] * nspin)
-		I0[c][spinc + 1] = abs(wc) ** 2
+	I0[spinc].update({c: sp.array([float(ener_gs[c] - e_cbm_ox), abs(wc) ** 2])})
 
 if rank == 0:
 
-	spec0, os_sum_gs = generate_spectrum(If = I0, nspin = nspin, enerlo = enerlo, enerhi = enerhi, \
+	spec0, os_sum_gs = generate_spectrum(If = I0, enerlo = enerlo, enerhi = enerhi, \
 	spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift)
 
 	fspec0 = "spec0.dat"
@@ -244,24 +237,13 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 
 					if sp.sqrt(Intensity) > throw_away_thr:
 			
-						# Data structure of Af
-						# {'ic1 iv2 ic2 ...': [energy, I]}
-						# {'ic1 iv2 ic2 ...': [energy, I_spin_up, I_spin_down]}
+						# Data structure of If[ispin]
+						# {'ic1 iv2 ic2 ...': [energy, Intensity]}
+						# Eachi configuration is unique in a spin manifold If[ispin]
+						
+						If[ispin][f_config_ic] = sp.array([enew, Intensity])
 			
 						# Checking this or not depends on the parallelization
-						if f_config_ic in If:
-					
-							If[f_config_ic][ispin + 1] = Intensity
-				
-						else:
-				
-							# This must be an numpy.array, otherwise the coming up superposition won't work
-							# Looks like I don't need superposition anymore because fs distributed onto each
-							# core are unique.
-	
-							If[f_config_ic] = sp.array([float(enew)] + [float(0)] * nspin)
-							If[f_config_ic][ispin + 1] = Intensity
-			
 						#if sp.sqrt(If) > det_thr:
 			
 							#print len(If), efinal, f_config, estimate, np.abs(Afc_wc)
@@ -312,7 +294,8 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 # end fgen
 
 # Record Af from all possible final-state indices f
-If = {} # start with an empty dictonary
+# If is an array of dictionaries (len = nspin)
+If = [{} for i in range(0, nspin)]
 
 iter_rank = 0
 
@@ -353,9 +336,30 @@ for ispin in range(0, nspin):
 
 print "process ", rank, "done"
 
+# Generate the spectra
+
+# Do it on each core, which is faster than doing it just on the root
+
+spec, os_sum = generate_spectrum(If = If, enerlo = enerlo, enerhi = enerhi, \
+spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift)
+
+# Gather results if mpi
 if ismpi:
 
 	comm.barrier()
+
+	# Reduce the spectrum
+
+	# comm.reduce might not be robust for python on every platform
+	spec_all = comm.reduce(spec[:, 1 : nspin + 1], op = MPI.SUM)
+	os_sum_arr = sp.array([os_sum])
+	os_sum_all = comm.reduce(os_sum_arr, op = MPI.SUM)
+
+	if rank == 0:
+		spec[:, 1 : nspin + 1] = spec_all.copy()
+		os_sum = os_sum_all[0]
+
+	# Gather the stick
 	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
 
 	# Only gather to pid = 0
@@ -365,6 +369,7 @@ if ismpi:
 #	
 #		If_all = {}
 #
+#		# This is extremely inefficient !!!
 #		for iter_If in If_gather:
 #
 #			for icommon in set(iter_If) & set(If_all):
@@ -378,20 +383,15 @@ if ismpi:
 else:
 	If_all = If
 
-# Generate the spectra
+# Output
 if rank == 0:
 
-	sp.save('If_stick', If_all)
-	
-	os_sum = 0 # test the sum rule
-	
+	#sp.save('If_stick', If_all)
+		
 	if only_do_maxfn:
 		fspec = "spec.only_maxfn_" + str(maxfn) + ".dat"
 	else:
 		fspec = "spec.maxfn_" + str(maxfn) + ".dat"
-
-	spec, os_sum = generate_spectrum(If = If_all, nspin = nspin, enerlo = enerlo, enerhi = enerhi, \
-	spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift)
 
 	print "Number of significant A^f's that need calculation: ", len(If_all)
 

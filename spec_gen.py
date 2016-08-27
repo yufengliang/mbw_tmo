@@ -10,34 +10,29 @@ from init import *
 def lorentzian(ediff, I, sigma):
 	return I / np.pi * sigma / (ediff ** 2 + sigma ** 2)
 
-def generate_spectrum(If, nspin, enerlo, enerhi, spec_dener, sigma, eshift):
+def generate_spectrum(If, enerlo, enerhi, spec_dener, sigma, eshift):
 
+	nspin = len(If)
 	ener = np.arange(enerlo, enerhi, spec_dener)
 	spec = np.zeros([len(ener), nspin + 1])
 	spec[:, 0] = ener
 
 	os_sum = 0
 
-	for iconf in If:
-	
-		ener_ic = float(If[iconf][0])
-	
-		if nspin == 2:
-		
-			os_sum += If[iconf][1] + If[iconf][2]
-	
-		else:
-	
-			os_sum += If[iconf][1]
-		
-		for s in range(len(ener)):
-	
-			if nspin == 2:
-				spec[s, 1] += lorentzian(ener[s] - (ener_ic + eshift), If[iconf][1], sigma)
-				spec[s, 2] += lorentzian(ener[s] - (ener_ic + eshift), If[iconf][2], sigma)
-			else:
-				spec[s, 1] += lorentzian(ener[s] - (ener_ic + eshift), If[iconf][1], sigma)
+	for ispin in range(0, nspin):
 
+		for iconf in If[ispin]:
+		
+			ener_f = If[ispin][iconf][0]
+		
+			I_f = If[ispin][iconf][1]
+			
+			os_sum += I_f
+		
+			for s in range(len(ener)):
+		
+				spec[s, ispin + 1] += lorentzian(ener[s] - (ener_f + eshift), I_f, sigma)
+	
 	return spec, os_sum
 	
 
