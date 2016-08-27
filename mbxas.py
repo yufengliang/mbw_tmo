@@ -393,7 +393,7 @@ if rank == 0:
 	else:
 		fspec = "spec.maxfn_" + str(maxfn) + ".dat"
 
-	print "Number of significant A^f's that need calculation: ", len(If_all)
+	#print "Number of significant A^f's that need calculation: ", len(If_all)
 
 	print "Sum-rule test: ", os_sum / os_sum_gs
 
