@@ -55,11 +55,11 @@ use_advanced_qr=input('use_advanced_qr', True)
 if use_advanced_qr and advanced_qr:
 	do_advanced_qr = True
 	if rank == 0:
-		print "We will do advanced qr decompositions. "
+		print("We will do advanced qr decompositions. ")
 else:
 	do_advanced_qr = False
 	if rank == 0:
-		print "We will NOT do advanced qr decompositions. "
+		print("We will NOT do advanced qr decompositions. ")
 
 # Given that we've known about everything below
 info_gs = np.load('info_gs.npy')
@@ -77,8 +77,8 @@ e_vbm_gs = ener_gs[ind_gs[nelect - 1]]
 e_cbm_gs = ener_gs[ind_gs[nelect]]
 
 if rank == 0:
-	print "e(VBM) gs = ", e_vbm_gs
-	print "e(CBM) gs = ", e_cbm_gs
+	print("e(VBM) gs = ", e_vbm_gs)
+	print( "e(CBM) gs = ", e_cbm_gs)
 
 ener_ox = [info_ox[i][2] for i in range(len(info_ox))]
 ind_ox = sorted(range(len(ener_ox)), key = lambda k : ener_ox[k])
@@ -87,8 +87,8 @@ e_vbm_ox = ener_ox[ind_ox[nelect - 1]]
 e_cbm_ox = ener_ox[ind_ox[nelect]]
 
 if rank == 0:
-	print "e(VBM) ox = ", e_vbm_ox
-	print "e(CBM) ox = ", e_cbm_ox
+	print("e(VBM) ox = ", e_vbm_ox)
+	print("e(CBM) ox = ", e_cbm_ox)
 
 # ------------------------------------------------------------------------------------
 
@@ -136,7 +136,6 @@ for j in range(nelect, nbnd_i):
 
 		xi_c[i, spinc] += xi[f, c] * wc
 
-	print spinc, c
 	# Non-interacting spectrum
 	I0[spinc].update({c: sp.array([float(ener_gs[c] - e_cbm_ox), abs(wc) ** 2])})
 
@@ -147,9 +146,9 @@ if rank == 0:
 
 	fspec0 = "spec0.dat"
 
-	print "Non-interacting spectra done. "
+	print("Non-interacting spectra done. ")
 
-	print "Output to ", fspec0
+	print("Output to ", fspec0)
 	
 	np.savetxt(fspec0, spec0, delimiter = ' ')
 
@@ -220,7 +219,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 			# do it !
 
 			if ndepth == 1:
-				print rank, ic
+				print(rank, ic)
 			
 			# Construct the new configuration
 			f_config_ic = f_config + str(ic) + ' '
@@ -331,7 +330,7 @@ for ispin in range(0, nspin):
 	try:
 		oc_vector = abs(sp.prod(sp.diagonal(xi_mat_R))) / abs(xi_mat_R[nelect, nelect]) * xi_mat_Q[:, nelect]
 	except ZeroDivisionError:
-		print "Orthogonality catastrophe occurs, my friend. "
+		print("Orthogonality catastrophe occurs, my friend. ")
 		oc_vector = xi_mat_Q[:, nelect] * 0.0
 
 	# an array that stores the norm of each row
@@ -346,7 +345,7 @@ for ispin in range(0, nspin):
 
 #print os_sum_gs
 
-print "process ", rank, "done"
+print("process ", rank, "done")
 
 # Generate the spectra
 
@@ -407,10 +406,10 @@ if rank == 0:
 
 	#print "Number of significant A^f's that need calculation: ", len(If_all)
 
-	print "Sum-rule test: ", os_sum / os_sum_gs
+	print("Sum-rule test: ", os_sum / os_sum_gs)
 
-	print "Interacting spectra with ", maxfn, " order of shakeup effects done. "
+	print("Interacting spectra with ", maxfn, " order of shakeup effects done. ")
 
-	print "Output to ", fspec
+	print("Output to ", fspec)
 	
 	np.savetxt(fspec, spec, delimiter = ' ')
