@@ -49,6 +49,17 @@ e_lo_thr=float(input_var('e_lo_thr'))
 e_hi_thr=float(input_var('e_hi_thr'))
 det_thr=float(input_var('det_thr', 1e-3))
 throw_away_thr=float(input_var('throw_away_thr', 1e-6))
+use_advanced_qr=input('use_advanced_qr', True)
+
+# Determine if advanced qr decompositions (qr_insert, qr_delete ...) will be used
+if use_advanced_qr and advanced_qr:
+	do_advanced_qr = True
+	if rank == 0:
+		print "We will do advanced qr decompositions. "
+else:
+	do_advanced_qr = False
+	if rank == 0:
+		print "We will NOT do advanced qr decompositions. "
 
 # Given that we've known about everything below
 info_gs = np.load('info_gs.npy')
@@ -249,7 +260,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 							#print len(If), efinal, f_config, estimate, np.abs(Afc_wc)
 
 
-			# If hasn't specified depth, then continue to the next recursion
+			# If hasn't reached specified depth, then continue to the next recursion
 
 			if ndepth < maxfn:
 	
@@ -315,13 +326,13 @@ for ispin in range(0, nspin):
 	"""
 	
 	# perform QR decomposition to xi_mat to find its orthogonal complement to the first N - 1 row vectors
-	xiQ, xiR = la.qr(xi_mat.transpose())
+	xi_mat_Q, xi_mat_R = la.qr(xi_mat.transpose())
 	
 	try:
-		oc_vector = abs(sp.prod(sp.diagonal(xiR))) / abs(xiR[nelect, nelect]) * xiQ[:, nelect]
+		oc_vector = abs(sp.prod(sp.diagonal(xi_mat_R))) / abs(xi_mat_R[nelect, nelect]) * xi_mat_Q[:, nelect]
 	except ZeroDivisionError:
 		print "Orthogonality catastrophe occurs, my friend. "
-		oc_vector = xiQ[:, nelect] * 0.0
+		oc_vector = xi_mat_Q[:, nelect] * 0.0
 
 	# an array that stores the norm of each row
 	# Now add the first nelect column with the c column
@@ -330,7 +341,8 @@ for ispin in range(0, nspin):
 	# This is the product of the norm of the lowest nelect states
 	row_prod = np.prod(row_c_norm[ind_ox[0 : nelect]])
 
-	fgen(ndepth = 1, maxv = nelect - 1, minc = nelect, efinal = 0.0, f_config = '', row_prod = row_prod, oc_vector = oc_vector)
+	fgen(ndepth = 1, maxv = nelect - 1, minc = nelect, efinal = 0.0, \
+	f_config = '', row_prod = row_prod, oc_vector = oc_vector)
 
 #print os_sum_gs
 
