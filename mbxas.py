@@ -49,17 +49,23 @@ e_lo_thr=float(input_var('e_lo_thr'))
 e_hi_thr=float(input_var('e_hi_thr'))
 det_thr=float(input_var('det_thr', 1e-3))
 throw_away_thr=float(input_var('throw_away_thr', 1e-6))
-use_advanced_qr=input('use_advanced_qr', True)
+use_advanced_qr=input_var('use_advanced_qr', True)
 
 # Determine if advanced qr decompositions (qr_insert, qr_delete ...) will be used
 if use_advanced_qr and advanced_qr:
-	do_advanced_qr = True
-	if rank == 0:
-		print("We will do advanced qr decompositions. ")
+	if only_do_maxfn:
+		do_advanced_qr = False
+		if rank == 0:
+			print("We will NOT do advanced qr decompositions because only_do_maxfn = True. ")
+	else:
+		do_advanced_qr = True
+		if rank == 0:
+			print("We will do advanced qr decompositions. ")
 else:
 	do_advanced_qr = False
 	if rank == 0:
 		print("We will NOT do advanced qr decompositions. ")
+
 
 # Given that we've known about everything below
 info_gs = np.load('info_gs.npy')
@@ -187,9 +193,23 @@ row_norm = np.array([la.norm(xi[i, ind_gs[0 : nelect]]) for i in range(nbnd_f)])
 
 """
 
-def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
+def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_last, Q_r_last, R_r_last):
 	
-	global iter_rank
+	"""
+	ndepth:		depth of the recursion, or the number of e-h pairs excited
+	maxv:		maximum index of the hole orbitals in this recursion
+	minc:		minimum index of the electron orbitals in this recursion
+	efinal:		energy of the excitation configuration in last recursion
+	f_config: 	excitation configuration so far
+	row_prod:	the product of the norm of all row vectors so far (may be obsolete)
+	oc_vector:	orthogonal complement vector to the other N - 1 row vectors [if the (last_v) row is missing]
+	Q_last:		Q matrix from the QR decomposition from last recursion
+	R_last:		R matrix from the QR decomposition from last recursion
+	Q_r_last:	Q_r matrix from the QR decomposition from last recursion
+	R_r_last:	R_r matrix from the QR decomposition from last recursion
+	"""
+
+	global iter_rank, nIf, nsIf
 
 	# You may consider put last_v on the argument list
 	last_v = maxv + 1
@@ -197,6 +217,8 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 
 	# save the current status
 	xi_mat_v_tmp = xi_mat[last_v].copy()
+
+	oc_vector_norm = la.norm(oc_vector)
 
 	#
 	for ic in range(minc, nbnd_f):
@@ -232,7 +254,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 			xi_mat[last_v] = ic_vec.copy()
 
 			# evaluate when only reach the energy threshold
-			if enew >= e_lo_thr:
+			if enew >= e_lo_thr and oc_vector_norm > det_thr:
 
 				# Only interested in f^(maxfn) ?
 				if not only_do_maxfn or only_do_maxfn and ndepth == maxfn:
@@ -242,8 +264,9 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 					# This is the old way
 					# Afc_wc = la.det(xi_mat) * wc
 					# A new way using the orthogonal complement (I don't care the phase):
-					#Intensity = abs(la.det(xi_mat)) ** 2
-					Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
+					Intensity = abs(la.det(xi_mat)) ** 2
+					#Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
+					nIf += 1
 
 					if sp.sqrt(Intensity) > throw_away_thr:
 			
@@ -252,6 +275,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 						# Eachi configuration is unique in a spin manifold If[ispin]
 						
 						If[ispin][f_config_ic] = sp.array([enew, Intensity])
+						nsIf += 1
 			
 						# Checking this or not depends on the parallelization
 						#if sp.sqrt(If) > det_thr:
@@ -263,6 +287,23 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 
 			if ndepth < maxfn:
 	
+				if do_advanced_qr:
+
+					Q_c, R_c = la.qr_delete(Q = Q_last, R = R_last, k = last_v, p = 1, which = 'col')
+
+					# overwrite_qru doesn't seem to work !!!
+					Q_c, R_c = la.qr_insert(Q = Q_c, R = R_c, u = ic_vec.transpose(), \
+					k = last_v, which = 'col', overwrite_qru = True)
+
+					# Update Q_r and R_r
+					if len(Q_r_last) == 0:
+						# the very first beginning
+						# use economic mode save lots of time afterwards
+						Q_r, R_r = la.qr(xi_mat[last_v : last_v + 1].transpose(), mode = 'economic')
+					else:
+						Q_r, R_r = la.qr_insert(Q = Q_r_last, R = R_r_last, u = ic_vec.transpose(), \
+						k = 0, which = 'col', overwrite_qru = True)
+
 				for iv in range(maxv, -1, -1):
 
 					ivind = ind_ox[iv]
@@ -279,18 +320,47 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 						# I will need to improve this. But basically this is impossible
 						exit_code("fgen: row_prod filter is broken. ")
 
+					if do_advanced_qr:
+
+						# Update Q_r and R_r with the iv row added
+						Q_r, R_r = la.qr_insert(Q = Q_r, R = R_r, u = xi_mat[iv].transpose(), \
+						k = 0, which = 'col', overwrite_qru = True)
+	
+						# many-row norm filter:
+						# If you find the qr decomposition from iv to the last row vector is already too small,
+						# then it is pointless to proceed to a smaller iv or to the next recursion.
+	
+						if abs(sp.prod(sp.diagonal(R_r))) < det_thr:
+							break
+
 					# Only interested in f^(maxfn) ?
 					if not only_do_maxfn or only_do_maxfn and ndepth == maxfn - 1:
 	
-						### Here comes another expensive calculation: find the oc_vector for each (ic, iv)
-						oc_vector_new = find_oc_vector(xi_mat, iv)
+						if do_advanced_qr:
+
+							# We are doing qr_delete/insert instead ! (can still be improved maybe)
+							Q_v, R_v = la.qr_delete(Q = Q_c, R = R_c, k = iv, p = 1, which = 'col')
+
+							Q_v, R_v = la.qr_insert(Q = Q_v, R = R_v, u = xi_mat[iv].transpose(), \
+							k = nelect, which = 'col', overwrite_qru = True)
+
+							oc_vector_new = sp.prod(sp.diagonal(R_v[0 : nelect + 1, 0 : nelect + 1])) * Q_v[:, nelect]
+
+						else:
+
+							### Here comes another expensive calculation: find the oc_vector for each (ic, iv)
+							oc_vector_new = find_oc_vector(xi_mat, iv)
+							Q_c = Q_last; R_c = R_last
+							Q_r = Q_r_last; R_r = R_r_last
 	
 					# Construct the new configuration
 					f_config_iv = f_config_ic + str(iv) + ' '
 					#print f_config_iv
 
 					fgen(ndepth = ndepth + 1, maxv = iv - 1, minc = ic + 1, efinal = enew, \
-					f_config = f_config_iv, row_prod = row_prod_iv, oc_vector = oc_vector_new)
+					f_config = f_config_iv, row_prod = row_prod_iv, oc_vector = oc_vector_new, \
+					Q_last = Q_c, R_last = R_c, \
+					Q_r_last = Q_r, R_r_last = R_r)
 		
 		# endif rank == iter_rank
 
@@ -308,6 +378,9 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector):
 If = [{} for i in range(0, nspin)]
 
 iter_rank = 0
+
+nIf = 0 # number of If calculated
+nsIf = 0 # number of significant If
 
 # loop over initial-state spin
 for ispin in range(0, nspin):
@@ -340,8 +413,14 @@ for ispin in range(0, nspin):
 	# This is the product of the norm of the lowest nelect states
 	row_prod = np.prod(row_c_norm[ind_ox[0 : nelect]])
 
+	# many-row vector filter initialization
+	Q_r = sp.zeros([0, 0])
+	R_r = sp.zeros([0, 0])
+
 	fgen(ndepth = 1, maxv = nelect - 1, minc = nelect, efinal = 0.0, \
-	f_config = '', row_prod = row_prod, oc_vector = oc_vector)
+	f_config = '', row_prod = row_prod, oc_vector = oc_vector, \
+	Q_last = xi_mat_Q, R_last = xi_mat_R, \
+	Q_r_last = Q_r, R_r_last = R_r)
 
 #print os_sum_gs
 
@@ -369,6 +448,8 @@ if ismpi:
 	if rank == 0:
 		spec[:, 1 : nspin + 1] = spec_all.copy()
 		os_sum = os_sum_all[0]
+
+	print("workload ", rank, nIf, nsIf)
 
 	# Gather the stick
 	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
