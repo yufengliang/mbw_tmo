@@ -49,8 +49,8 @@ e_lo_thr=float(input_var('e_lo_thr'))
 e_hi_thr=float(input_var('e_hi_thr'))
 det_thr=float(input_var('det_thr', 1e-3))
 I_thr=float(input_var('I_thr', 5e-5))
-throw_away_thr=float(input_var('throw_away_thr', I_thr))
-I_dump_thr=float(input_var('I_dump_thr', 1e-6))
+throw_away_thr=float(input_var('throw_away_thr', det_thr))
+I_dump_thr=float(input_var('I_dump_thr', I_thr))
 use_advanced_qr=input_var('use_advanced_qr', True)
 
 # Determine if advanced qr decompositions (qr_insert, qr_delete ...) will be used
