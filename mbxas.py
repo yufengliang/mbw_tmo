@@ -48,8 +48,8 @@ pol = int(input_var('pol'))
 e_lo_thr=float(input_var('e_lo_thr'))
 e_hi_thr=float(input_var('e_hi_thr'))
 det_thr=float(input_var('det_thr', 1e-3))
-I_thr=float(input_var('I_thr', 1e-5))
-throw_away_thr=float(input_var('throw_away_thr', 1e-6))
+I_thr=float(input_var('I_thr', 5e-4))
+throw_away_thr=float(input_var('throw_away_thr', I_thr))
 I_dump_thr=float(input_var('I_dump_thr', 1e-6))
 use_advanced_qr=input_var('use_advanced_qr', True)
 
@@ -473,8 +473,6 @@ if ismpi:
 		spec[:, 1 : nspin + 1] = spec_all.copy()
 		os_sum = os_sum_all[0]
 
-	print("workload ", rank, nIf, nsIf)
-
 	# Gather the stick
 	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
 
@@ -498,6 +496,17 @@ if ismpi:
 
 else:
 	If_all = If
+
+# print workload
+print("workload ", rank, nIf, nsIf)
+
+if ismpi:
+	
+	nIf_sum = comm.reduce(sp.array([nIf]), op = MPI.SUM)
+	nsIf_sum = comm.reduce(sp.array([nsIf]), op = MPI.SUM)
+
+if rank == 0:
+	print("total workload ", nIf_sum, nsIf_sum)
 
 # Output
 if rank == 0:
