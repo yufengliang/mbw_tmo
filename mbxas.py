@@ -262,10 +262,9 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 					# Here comes our determinant !
 	
 					# This is the old way
-					# Afc_wc = la.det(xi_mat) * wc
+					# Intensity = abs(la.det(xi_mat)) ** 2
 					# A new way using the orthogonal complement (I don't care the phase):
-					Intensity = abs(la.det(xi_mat)) ** 2
-					#Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
+					Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
 					nIf += 1
 
 					if sp.sqrt(Intensity) > throw_away_thr:
@@ -291,9 +290,9 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 
 					Q_c, R_c = la.qr_delete(Q = Q_last, R = R_last, k = last_v, p = 1, which = 'col')
 
-					# overwrite_qru doesn't seem to work !!!
+					# don't use overwrite_qru otherwise ic_vec will be changed !!!
 					Q_c, R_c = la.qr_insert(Q = Q_c, R = R_c, u = ic_vec.transpose(), \
-					k = last_v, which = 'col', overwrite_qru = True)
+					k = last_v, which = 'col')
 
 					# Update Q_r and R_r
 					if len(Q_r_last) == 0:
@@ -302,7 +301,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 						Q_r, R_r = la.qr(xi_mat[last_v : last_v + 1].transpose(), mode = 'economic')
 					else:
 						Q_r, R_r = la.qr_insert(Q = Q_r_last, R = R_r_last, u = ic_vec.transpose(), \
-						k = 0, which = 'col', overwrite_qru = True)
+						k = 0, which = 'col')
 
 				for iv in range(maxv, -1, -1):
 
@@ -324,7 +323,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 
 						# Update Q_r and R_r with the iv row added
 						Q_r, R_r = la.qr_insert(Q = Q_r, R = R_r, u = xi_mat[iv].transpose(), \
-						k = 0, which = 'col', overwrite_qru = True)
+						k = 0, which = 'col')
 	
 						# many-row norm filter:
 						# If you find the qr decomposition from iv to the last row vector is already too small,
@@ -332,6 +331,10 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 	
 						if abs(sp.prod(sp.diagonal(R_r))) < det_thr:
 							break
+
+					# Construct the new configuration
+					f_config_iv = f_config_ic + str(iv) + ' '
+					#print f_config_iv
 
 					# Only interested in f^(maxfn) ?
 					if not only_do_maxfn or only_do_maxfn and ndepth == maxfn - 1:
@@ -342,10 +345,19 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 							Q_v, R_v = la.qr_delete(Q = Q_c, R = R_c, k = iv, p = 1, which = 'col')
 
 							Q_v, R_v = la.qr_insert(Q = Q_v, R = R_v, u = xi_mat[iv].transpose(), \
-							k = nelect, which = 'col', overwrite_qru = True)
+							k = nelect, which = 'col')
 
-							oc_vector_new = sp.prod(sp.diagonal(R_v[0 : nelect + 1, 0 : nelect + 1])) * Q_v[:, nelect]
+							oc_vector_new = sp.prod(sp.diagonal(R_v[0 : nelect, 0 : nelect])) * Q_v[:, nelect]
 
+							# Check the accuracy of the oc_vector_new compared to full qr
+							#oc_vector_old = find_oc_vector(xi_mat, iv)
+
+							#if not sp.allclose(la.norm(oc_vector_new), la.norm(oc_vector_old)):
+							#	exit_code("oc_vector norm not equal, config: " + f_config_iv)
+							
+							#oc_vector_new *= oc_vector_old[0] / oc_vector_new[0]
+							#if not sp.allclose(oc_vector_new, oc_vector_old):
+							#	exit_code("oc_vector not equal, config: " + f_config_iv)
 						else:
 
 							### Here comes another expensive calculation: find the oc_vector for each (ic, iv)
@@ -353,10 +365,6 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 							Q_c = Q_last; R_c = R_last
 							Q_r = Q_r_last; R_r = R_r_last
 	
-					# Construct the new configuration
-					f_config_iv = f_config_ic + str(iv) + ' '
-					#print f_config_iv
-
 					fgen(ndepth = ndepth + 1, maxv = iv - 1, minc = ic + 1, efinal = enew, \
 					f_config = f_config_iv, row_prod = row_prod_iv, oc_vector = oc_vector_new, \
 					Q_last = Q_c, R_last = R_c, \
@@ -421,6 +429,8 @@ for ispin in range(0, nspin):
 	f_config = '', row_prod = row_prod, oc_vector = oc_vector, \
 	Q_last = xi_mat_Q, R_last = xi_mat_R, \
 	Q_r_last = Q_r, R_r_last = R_r)
+
+	iter_rank += 1
 
 #print os_sum_gs
 
