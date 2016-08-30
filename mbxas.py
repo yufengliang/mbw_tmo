@@ -445,6 +445,7 @@ for ispin in range(0, nspin):
 	Q_r_last = Q_r, R_r_last = R_r)
 
 	iter_rank += 1
+	iter_rank %= size
 
 #print os_sum_gs
 
