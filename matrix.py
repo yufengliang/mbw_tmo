@@ -27,7 +27,7 @@ def find_oc_vector(A, *arg):
 	
 	# The magnitude of the oc_vector is set to be the same as the product 
 	# of the norm of the first N - 1 orthogonalized vectors
-	oc_vector = abs(sp.prod(sp.diagonal(R[0 : N, 0 : N]))) * Q[:, N - 1]
+	oc_vector = abs(sp.prod(sp.diagonal(R[0 : N - 1, 0 : N - 1]))) * Q[:, N - 1]
 
 	if len(arg) >= 1:
 		# switch it back
