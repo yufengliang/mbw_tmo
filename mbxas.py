@@ -48,7 +48,9 @@ pol = int(input_var('pol'))
 e_lo_thr=float(input_var('e_lo_thr'))
 e_hi_thr=float(input_var('e_hi_thr'))
 det_thr=float(input_var('det_thr', 1e-3))
+I_thr=float(input_var('I_thr', 1e-5))
 throw_away_thr=float(input_var('throw_away_thr', 1e-6))
+I_dump_thr=float(input_var('I_dump_thr', 1e-6))
 use_advanced_qr=input_var('use_advanced_qr', True)
 
 # Determine if advanced qr decompositions (qr_insert, qr_delete ...) will be used
@@ -193,7 +195,7 @@ row_norm = np.array([la.norm(xi[i, ind_gs[0 : nelect]]) for i in range(nbnd_f)])
 
 """
 
-def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_last, Q_r_last, R_r_last):
+def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, I_thr, I_dump_thr, oc_vector, Q_last, R_last, Q_r_last, R_r_last):
 	
 	"""
 	ndepth:		depth of the recursion, or the number of e-h pairs excited
@@ -201,7 +203,9 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 	minc:		minimum index of the electron orbitals in this recursion
 	efinal:		energy of the excitation configuration in last recursion
 	f_config: 	excitation configuration so far
-	row_prod:	the product of the norm of all row vectors so far (may be obsolete)
+	row_prod:	product of the norm of all row vectors so far (may be obsolete)
+	I_thr:		threshold for small intensity
+	I_dump_thr:	threshold for dumping intensity
 	oc_vector:	orthogonal complement vector to the other N - 1 row vectors [if the (last_v) row is missing]
 	Q_last:		Q matrix from the QR decomposition from last recursion
 	R_last:		R matrix from the QR decomposition from last recursion
@@ -219,6 +223,14 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 	xi_mat_v_tmp = xi_mat[last_v].copy()
 
 	oc_vector_norm = la.norm(oc_vector)
+
+	# Some thresholds
+	det_thr = sp.sqrt(abs(I_thr))
+	throw_away_thr = sp.sqrt(abs(I_dump_thr))
+	fac = 1.0 / (nbnd_f - minc + 1) / (maxv + 1)
+	I_thr_new = I_thr * fac
+	det_thr_new = sp.sqrt(abs(I_thr_new))
+	I_dump_thr_new = I_dump_thr * fac
 
 	#
 	for ic in range(minc, nbnd_f):
@@ -329,7 +341,7 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 						# If you find the qr decomposition from iv to the last row vector is already too small,
 						# then it is pointless to proceed to a smaller iv or to the next recursion.
 	
-						if abs(sp.prod(sp.diagonal(R_r))) < det_thr:
+						if abs(sp.prod(sp.diagonal(R_r))) < det_thr_new:
 							break
 
 					# Construct the new configuration
@@ -366,7 +378,8 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, oc_vector, Q_last, R_la
 							Q_r = Q_r_last; R_r = R_r_last
 	
 					fgen(ndepth = ndepth + 1, maxv = iv - 1, minc = ic + 1, efinal = enew, \
-					f_config = f_config_iv, row_prod = row_prod_iv, oc_vector = oc_vector_new, \
+					f_config = f_config_iv, row_prod = row_prod_iv, I_thr = I_thr_new, I_dump_thr = I_dump_thr_new, \
+					oc_vector = oc_vector_new, \
 					Q_last = Q_c, R_last = R_c, \
 					Q_r_last = Q_r, R_r_last = R_r)
 		
@@ -426,7 +439,8 @@ for ispin in range(0, nspin):
 	R_r = sp.zeros([0, 0])
 
 	fgen(ndepth = 1, maxv = nelect - 1, minc = nelect, efinal = 0.0, \
-	f_config = '', row_prod = row_prod, oc_vector = oc_vector, \
+	f_config = '', row_prod = row_prod, I_thr = I_thr, I_dump_thr = I_dump_thr, \
+	oc_vector = oc_vector, \
 	Q_last = xi_mat_Q, R_last = xi_mat_R, \
 	Q_r_last = Q_r, R_r_last = R_r)
 
