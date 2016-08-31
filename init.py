@@ -8,6 +8,12 @@ from datetime import timedelta
 import pdb
 import os
 
+# Version
+ispython3 = False
+
+if sys.version_info.major == 3:
+	ispython3 = True
+
 # Parallel Computing
 
 ismpi = True

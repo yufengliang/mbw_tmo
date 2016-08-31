@@ -52,6 +52,7 @@ I_thr=float(input_var('I_thr', 5e-5))
 throw_away_thr=float(input_var('throw_away_thr', det_thr))
 I_dump_thr=float(input_var('I_dump_thr', I_thr))
 use_advanced_qr=input_var('use_advanced_qr', True)
+output_stick=input_var('output_stick', False)
 
 # Determine if advanced qr decompositions (qr_insert, qr_delete ...) will be used
 if use_advanced_qr and advanced_qr:
@@ -475,7 +476,19 @@ if ismpi:
 		os_sum = os_sum_all[0]
 
 	# Gather the stick
-	If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
+	if output_stick:
+
+		# I'll take care of this later
+		# Reduce the size of If before gather
+		for ispin in range(0, nspin):
+
+			if ispython3:
+				If[ispin] = {conf: I for conf, I in If[ispin].items() if I > I_dump_thr}
+			else:
+				If[ispin] = {conf: I for conf, I in If[ispin].iteritems() if I > I_dump_thr}
+
+		If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
+
 
 	# Only gather to pid = 0
 #	if rank == 0:
