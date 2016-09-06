@@ -280,19 +280,19 @@ def fgen(ndepth, maxv, minc, efinal, f_config, row_prod, I_thr, I_dump_thr, oc_v
 					Intensity = abs(sp.dot(oc_vector.conjugate(), ic_vec)) ** 2
 					nIf += 1
 
-					if sp.sqrt(Intensity) > throw_away_thr:
+					#if sp.sqrt(Intensity) > throw_away_thr:
 			
-						# Data structure of If[ispin]
-						# {'ic1 iv2 ic2 ...': [energy, Intensity]}
-						# Eachi configuration is unique in a spin manifold If[ispin]
-						
-						If[ispin][f_config_ic] = sp.array([enew, Intensity])
-						nsIf += 1
-			
-						# Checking this or not depends on the parallelization
-						#if sp.sqrt(If) > det_thr:
-			
-							#print len(If), efinal, f_config, estimate, np.abs(Afc_wc)
+					# Data structure of If[ispin]
+					# {'ic1 iv2 ic2 ...': [energy, Intensity]}
+					# Eachi configuration is unique in a spin manifold If[ispin]
+					
+					If[ispin][f_config_ic] = sp.array([enew, Intensity])
+					#nsIf += 1
+		
+					# Checking this or not depends on the parallelization
+					#if sp.sqrt(If) > det_thr:
+		
+						#print len(If), efinal, f_config, estimate, np.abs(Afc_wc)
 
 
 			# If hasn't reached specified depth, then continue to the next recursion
@@ -402,7 +402,7 @@ If = [{} for i in range(0, nspin)]
 iter_rank = 0
 
 nIf = 0 # number of If calculated
-nsIf = 0 # number of significant If
+#nsIf = 0 # number of significant If
 
 # loop over initial-state spin
 for ispin in range(0, nspin):
@@ -459,6 +459,8 @@ print("process ", rank, "done")
 spec, os_sum = generate_spectrum(If = If, enerlo = enerlo, enerhi = enerhi, \
 spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift)
 
+nsIf = nIf
+
 # Gather results if mpi
 if ismpi:
 
@@ -478,22 +480,40 @@ if ismpi:
 	# Gather the stick
 	if output_stick:
 
+		nsIf = 0
 		# I'll take care of this later
 		# Reduce the size of If before gather
 		for ispin in range(0, nspin):
 
 			if ispython3:
-				If[ispin] = {conf: I for conf, I in If[ispin].items() if I > I_dump_thr}
+				# info[1] is the Intensity
+				If[ispin] = {conf: info for conf, info in If[ispin].items() if info[1] > I_dump_thr}
 			else:
-				If[ispin] = {conf: I for conf, I in If[ispin].iteritems() if I > I_dump_thr}
+				If[ispin] = {conf: info for conf, info in If[ispin].iteritems() if info[1] > I_dump_thr}
+
+			nsIf += len(If[ispin])
+
 
 		If_gather = comm.gather(If, root = 0) # Don't ever do this in the rank == 0 block
 
+		if rank == 0:
+		
+			print("Begin to gather If...")
+
+			If_all = [{} for i in range(0, nspin)]
+	
+			for iter_If in If_gather:
+
+				for ispin in range(0, nspin):
+
+					# This is based on the requirement that configuations on each core are unique
+					If_all[ispin].update(iter_If[ispin])
+
+			print("Done gathering If.")
 
 	# Only gather to pid = 0
 #	if rank == 0:
 #
-#		print "Begin to gather If..."
 #	
 #		If_all = {}
 #
@@ -519,14 +539,12 @@ if ismpi:
 	nIf_sum = comm.reduce(sp.array([nIf]), op = MPI.SUM)
 	nsIf_sum = comm.reduce(sp.array([nsIf]), op = MPI.SUM)
 
-if rank == 0:
-	print("total workload ", nIf_sum, nsIf_sum)
+	if rank == 0:
+		print("total workload ", nIf_sum[0], nsIf_sum[0])
 
 # Output
 if rank == 0:
 
-	#sp.save('If_stick', If_all)
-		
 	if only_do_maxfn:
 		fspec = "spec.only_maxfn_" + str(maxfn) + ".dat"
 	else:
@@ -541,3 +559,7 @@ if rank == 0:
 	print("Output to ", fspec)
 	
 	np.savetxt(fspec, spec, delimiter = ' ')
+	
+	if output_stick:
+		sp.save('If_stick', If_all)
+		
