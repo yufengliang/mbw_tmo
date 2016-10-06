@@ -7,6 +7,7 @@ from datetime import datetime
 from datetime import timedelta
 import pdb
 import os
+import bisect
 
 # Version
 ispython3 = False

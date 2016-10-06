@@ -35,5 +35,25 @@ def generate_spectrum(If, enerlo, enerhi, spec_dener, sigma, eshift):
 	
 	return spec, os_sum
 	
+def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, ispin):
 
+	ener = np.arange(enerlo, enerhi, spec_dener)
+	spec = np.zeros([len(ener), nspin + 1])
+	spec[:, 0] = ener
+
+	os_sum = 0
+
+	for iconf in Af:
+		
+		ener_f = Af[iconf][0]
+		
+		I_f = abs(Af[iconf][1]) ** 2
+			
+		os_sum += I_f
+		
+		for s in range(len(ener)):
+		
+			spec[s, ispin + 1] += lorentzian(ener[s] - (ener_f + eshift), I_f, sigma)
+	
+	return spec, os_sum
 
