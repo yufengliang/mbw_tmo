@@ -35,7 +35,7 @@ def generate_spectrum(If, enerlo, enerhi, spec_dener, sigma, eshift):
 	
 	return spec, os_sum
 	
-def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, ispin):
+def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, ispin, rank, size):
 
 	ener = np.arange(enerlo, enerhi, spec_dener)
 	spec = np.zeros([len(ener), nspin + 1])
@@ -43,8 +43,14 @@ def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, i
 
 	os_sum = 0
 
+	iter_rank = 0
+
 	for iconf in Af:
 		
+		iter_rank += 1
+		iter_rank %= size
+		if iter_rank != rank: continue
+
 		ener_f = Af[iconf][0]
 		
 		I_f = abs(Af[iconf][1]) ** 2

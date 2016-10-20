@@ -258,11 +258,10 @@ for i in range(nbnd_f): # i goes over the final occupied orbitals
 	
 	xi_mat[i, 0 : nelect] = xi[ind_i, ind_gs[0 : nelect]]
 
-
-iter_rank = 0
-
 nIf = 0 # number of If calculated
 #nsIf = 0 # number of significant If
+
+os_sum = 0
 
 # loop over initial-state spin
 for ispin in range(0, nspin):
@@ -380,7 +379,14 @@ for ispin in range(0, nspin):
 			# Make sure it is in descending column order 	
 			low_izeta = bisect.bisect_left(-zeta_coord[1], -(f_config_minv - 1))
 
+			iter_rank = 0
+
 			for izeta in range(low_izeta, len(zeta_coord[0])):
+	
+				iter_rank += 1
+				iter_rank %= size
+
+				if iter_rank != rank: continue
 
 				# zeta_coord[0] = 0 corresponds c = nelect, the (N+1)th state 
 				new_c = zeta_coord[0][izeta] + nelect
@@ -467,32 +473,72 @@ for ispin in range(0, nspin):
 		det_thr /= 1.0
 
 		# gather all Af_new, record the results, and copy Af_new into A_f
+		# This could be very inefficient
 		if ismpi:
 
 			comm.barrier()
+
+			del Af
+
+			Af_gather = comm.gather(Af_new, root = 0)
+
+			if rank == 0:
+
+				Af_all = {}
+
+				print("Begin to gather Af ...")
+
+				for iter_Af in Af_gather:
+
+					for iconf in iter_Af:
+
+						if iconf in Af_all:
+							Af_all[iconf][1] += iter_Af[1]
+						else:
+							Af_all[iconf] = sp.array([iter_Af[0], iter_Af[1]])
+						
+				print("Done gathering Af.")
+
+			Af = comm.bcast(Af_gather, root = 0)
+			
 		# end if ismpi
 		else:
 
 			Af = Af_new.copy()
-			del Af_new
+		
+		del Af_new
 
-		# Turn Af into a spectrum
+		# Turn Af into a spectrum: distribute the job
 		spec_tmp, os_sum_tmp = generate_spectrum_Af(Af = Af, enerlo = enerlo, enerhi = enerhi, \
-		spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift, nspin = nspin, ispin = ispin)
+		spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift, nspin = nspin, ispin = ispin, \
+		rank = rank, size = size)
 
-		if ispin == 0 and ndepth == 1:
-			spec = spec_tmp.copy()
-			os_sum = os_sum_tmp
+		if ndepth == 1:
+			spec_part = spec_tmp.copy()
+			os_sum_part = os_sum_tmp
 		else:
-			spec[:, ispin + 1] += spec_tmp[:, ispin + 1]
-			os_sum += os_sum_tmp
+			spec_part[:, ispin + 1] += spec_tmp[:, ispin + 1]
+			os_sum_part += os_sum_tmp
 
 	# end for ndepth
+	
+	# Reduce the spectrum: this is not very elegant
+	if ismpi:
+		spec_all = comm.reduce(spec_part[:, 1 : nspin + 1], op = MPI.SUM)
+		os_sum_arr = sp.array([os_sum_part])
+		os_sum_all = comm.reduce(os_sum_arr, op = MPI.SUM)
 
-	#iter_rank += 1
-	#iter_rank %= size
+	else:
+		spec_all = spec_part
+		os_sum_all = os_sum_part
 
-#print os_sum_gs
+	os_sum += os_sum_all
+
+	if ispin == 0:
+		spec = spec_part.copy()
+		spec[:, 1 : nspin + 1] = spec_all[:, 1 : nspin + 1].copy()
+	else:
+		spec[:, 1 : nspin + 1] += spec_all[:, 1 : nspin + 1]
 
 print("process ", rank, "done")
 
@@ -514,6 +560,6 @@ if rank == 0:
 	
 	np.savetxt(fspec, spec, delimiter = ' ')
 	
-	if output_stick:
-		sp.save('If_stick', If_all)
+#	if output_stick:
+#		sp.save('If_stick', If_all)
 		
