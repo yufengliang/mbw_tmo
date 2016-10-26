@@ -80,8 +80,9 @@ else:
 # Given that we've known about everything below
 info_gs = np.load('info_gs.npy')
 info_ox = np.load('info_ox.npy')
-spins_gs = np.load('spins_gs.npy')
-spins_ox = np.load('spins_ox.npy')
+if nspin == 2:
+	spins_gs = np.load('spins_gs.npy')
+	spins_ox = np.load('spins_ox.npy')
 states_gs = np.load('states_gs.npy')
 states_ox = np.load('states_ox.npy')
 xi = np.load('xi.npy')
