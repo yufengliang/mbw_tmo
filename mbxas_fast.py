@@ -296,7 +296,7 @@ for ispin in range(0, nspin):
 	zeta_mat = sp.matrix(xi_mat[nelect : nbnd_f, :]) * sp.matrix(xi_mat_inv)
 
 	# Check the sparsity of the zeta-matrix
-	sparse_thr = 1e-4
+	sparse_thr = sp.sqrt(abs(I_thr))
 
 	"""
 	Record the coordinates and values of all significant matrix elements
@@ -387,6 +387,7 @@ for ispin in range(0, nspin):
 				iter_rank %= size
 
 				if iter_rank != rank: continue
+				#print("izeta ", rank, izeta, zeta_coord[0][izeta], zeta_coord[1][izeta])
 
 				# zeta_coord[0] = 0 corresponds c = nelect, the (N+1)th state 
 				new_c = zeta_coord[0][izeta] + nelect
@@ -470,7 +471,7 @@ for ispin in range(0, nspin):
 		# end for f_config
 
 		# adapt det_thr
-		det_thr /= 1.0
+		det_thr /= nbnd_f
 
 		# gather all Af_new, record the results, and copy Af_new into A_f
 		# This could be very inefficient
@@ -484,22 +485,32 @@ for ispin in range(0, nspin):
 
 			if rank == 0:
 
-				Af_all = {}
+				Af = {}
 
 				print("Begin to gather Af ...")
+				print(MPI.Wtime())
 
 				for iter_Af in Af_gather:
 
 					for iconf in iter_Af:
 
-						if iconf in Af_all:
-							Af_all[iconf][1] += iter_Af[1]
+						if iconf in Af:
+							Af[iconf][1] += iter_Af[iconf][1]
 						else:
-							Af_all[iconf] = sp.array([iter_Af[0], iter_Af[1]])
-						
-				print("Done gathering Af.")
+							Af[iconf] = sp.array([iter_Af[iconf][0], iter_Af[iconf][1]])
 
-			Af = comm.bcast(Af_gather, root = 0)
+				print("Done gathering Af.")
+				print(MPI.Wtime())
+
+			else:
+
+				Af = None
+
+			comm.barrier()
+			print(rank, MPI.Wtime())
+			Af = comm.bcast(Af, root = 0)
+			print(rank, MPI.Wtime())
+			sys.stdout.flush()
 			
 		# end if ismpi
 		else:
@@ -513,6 +524,8 @@ for ispin in range(0, nspin):
 		spec_dener = (enerhi - enerlo) / nener, sigma = sigma, eshift = eshift, nspin = nspin, ispin = ispin, \
 		rank = rank, size = size)
 
+		print("os_sum_tmp ", rank, ispin, os_sum_tmp)
+		sys.stdout.flush()
 		if ndepth == 1:
 			spec_part = spec_tmp.copy()
 			os_sum_part = os_sum_tmp
@@ -523,22 +536,27 @@ for ispin in range(0, nspin):
 	# end for ndepth
 	
 	# Reduce the spectrum: this is not very elegant
+	# Note that spec_all is different from spec_part; there isn't an energy column in spec_part
 	if ismpi:
 		spec_all = comm.reduce(spec_part[:, 1 : nspin + 1], op = MPI.SUM)
 		os_sum_arr = sp.array([os_sum_part])
 		os_sum_all = comm.reduce(os_sum_arr, op = MPI.SUM)
-
 	else:
-		spec_all = spec_part
+		spec_all = spec_part[:, 1 : nspin + 1]
 		os_sum_all = os_sum_part
 
-	os_sum += os_sum_all
+	if rank == 0:
+	
+		if ismpi:
+			os_sum += os_sum_all[0]
+		else:
+			os_sum += os_sum_all
 
-	if ispin == 0:
-		spec = spec_part.copy()
-		spec[:, 1 : nspin + 1] = spec_all[:, 1 : nspin + 1].copy()
-	else:
-		spec[:, 1 : nspin + 1] += spec_all[:, 1 : nspin + 1]
+		if ispin == 0:
+			spec = spec_part.copy()
+			spec[:, 1 : nspin + 1] = spec_all[:, 0 : nspin].copy()
+		else:
+			spec[:, 1 : nspin + 1] += spec_all[:, 0 : nspin]
 
 print("process ", rank, "done")
 

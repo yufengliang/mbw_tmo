@@ -8,7 +8,7 @@ from init import *
 
 # Lorentzian
 def lorentzian(ediff, I, sigma):
-	return I / np.pi * sigma / (ediff ** 2 + sigma ** 2)
+	return I / np.pi * sigma / (float(ediff) ** 2 + sigma ** 2)
 
 def generate_spectrum(If, enerlo, enerhi, spec_dener, sigma, eshift):
 
@@ -43,12 +43,9 @@ def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, i
 
 	os_sum = 0
 
-	iter_rank = 0
-
 	for iconf in Af:
 		
-		iter_rank += 1
-		iter_rank %= size
+		iter_rank = int(iconf.split()[0]) % size
 		if iter_rank != rank: continue
 
 		ener_f = Af[iconf][0]
@@ -59,7 +56,7 @@ def generate_spectrum_Af(Af, enerlo, enerhi, spec_dener, sigma, eshift, nspin, i
 		
 		for s in range(len(ener)):
 		
-			spec[s, ispin + 1] += lorentzian(ener[s] - (ener_f + eshift), I_f, sigma)
+			spec[s, ispin + 1] += float(lorentzian(ener[s] - (ener_f + eshift), I_f, sigma))
 	
 	return spec, os_sum
 
